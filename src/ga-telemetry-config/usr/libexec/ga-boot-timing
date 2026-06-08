@@ -29,7 +29,7 @@ parse_analyze() {
 
 parse_analyze
 
-BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null | tr -d '-')
+BOOT_ID=$(tr -d '-' < /proc/sys/kernel/random/boot_id 2>/dev/null)
 
 # Key service milestones (seconds from boot start)
 T_NETWORK=$(get_service_time "network-online.target")

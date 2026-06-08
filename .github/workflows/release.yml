@@ -1,0 +1,83 @@
+name: Release
+
+# Publishes a self-contained OCI artifact at
+# ghcr.io/greenautarky/ga-telemetry-config:<tag> that the
+# ha-operating-system buildroot pulls at OS build time. Same pattern as
+# greenautarky/ga-bootstrap and greenautarky/greenautarky-onboarding.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (default: tag-derived)"
+        required: false
+
+permissions:
+  contents: write   # create the GitHub Release
+  packages: write   # push the OCI artifact to GHCR
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version + assert pyproject matches
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            REQ="${GITHUB_REF_NAME#v}"
+          else
+            REQ="${{ github.event.inputs.version }}"
+            [ -z "$REQ" ] && REQ=$(grep '^version' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          fi
+          PY=$(grep '^version' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ "$REQ" != "$PY" ]; then
+            echo "::error::Version drift — tag=$REQ pyproject=$PY"
+            exit 1
+          fi
+          echo "version=$REQ" >> "$GITHUB_OUTPUT"
+          echo "Publishing v$REQ"
+
+      - name: Sanity-check the boot-timing script is executable
+        run: |
+          test -x src/ga-telemetry-config/usr/libexec/ga-boot-timing
+
+      - name: Package the placement artifact
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          # Tarball root contains `usr/` and `etc/` so a consumer extracts
+          # straight into a rootfs-overlay: `tar xzf - -C buildroot-external/rootfs-overlay/`.
+          tar czf "ga-telemetry-config-${V}.tar.gz" \
+            -C src/ga-telemetry-config usr etc
+          sha256sum "ga-telemetry-config-${V}.tar.gz" > SHA256SUMS
+          echo "--- SHA256SUMS ---"; cat SHA256SUMS
+
+      - name: Install oras
+        uses: oras-project/setup-oras@v1
+
+      - name: Push OCI artifact to GHCR
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          REPO="ghcr.io/greenautarky/ga-telemetry-config"
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+          oras push "${REPO}:${V}" \
+            --annotation "org.opencontainers.image.source=https://github.com/greenautarky/ga-telemetry-config" \
+            --annotation "org.opencontainers.image.version=${V}" \
+            "ga-telemetry-config-${V}.tar.gz:application/gzip" \
+            "SHA256SUMS:text/plain"
+          oras tag "${REPO}:${V}" latest
+
+      - name: Create / update the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          NOTES="ga-telemetry-config v${V} — see CHANGELOG.md for details. Placement artifact: ga-telemetry-config-${V}.tar.gz — extract into a rootfs (\`tar xzf - -C /\`). Also at ghcr.io/greenautarky/ga-telemetry-config:${V}."
+          gh release create "v${V}" --title "v${V}" --notes "$NOTES" \
+            "ga-telemetry-config-${V}.tar.gz" "SHA256SUMS" \
+          || gh release upload "v${V}" \
+            "ga-telemetry-config-${V}.tar.gz" "SHA256SUMS" --clobber

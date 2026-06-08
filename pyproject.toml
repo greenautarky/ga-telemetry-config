@@ -1,0 +1,29 @@
+[project]
+name = "ga-telemetry-config"
+version = "1.0.0"
+description = "GreenAutarky on-device telemetry configuration — fluent-bit boot-log capture + boot-timing metrics exporter"
+authors = [{name = "Thomas Taube", email = "thomas@greenautarky.com"}]
+license = {text = "Proprietary"}
+requires-python = ">=3.13"
+
+# The actual payload is plain POSIX shell + a fluent-bit INI config. Python
+# is only here so we can reuse the same ruff + pytest infrastructure and
+# the tag-driven release pipeline that the other Tier-2 components use.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"

@@ -126,7 +126,7 @@ def _loki_output_block() -> list[str]:
     if cur is not None:
         blocks.append(cur)
     for b in blocks:
-        if any(l.split()[:2] == ["Name", "loki"] for l in b if l.split()):
+        if any(ln.split()[:2] == ["Name", "loki"] for ln in b if ln.split()):
             return b
     raise AssertionError("no [OUTPUT] block with `Name loki` in fluent-bit-tier0.conf")
 
@@ -139,7 +139,7 @@ def test_tier0_loki_output_is_env_driven(key):
     and once Loki enforces auth, its logs are silently dropped.
     """
     block = _loki_output_block()
-    matching = [l for l in block if l.split() and l.split()[0] == key]
+    matching = [ln for ln in block if ln.split() and ln.split()[0] == key]
     assert matching, f"tier-0 loki OUTPUT is missing `{key}`"
     value = matching[0].split(maxsplit=1)[1].strip()
     assert value.startswith("${") and value.endswith("}"), (
@@ -150,6 +150,10 @@ def test_tier0_loki_output_is_env_driven(key):
 def test_tier0_loki_output_has_no_shared_static_tenant():
     """`Tenant_ID greenautarky` was a fleet-wide shared tenant — no isolation."""
     block = _loki_output_block()
-    offenders = [l.strip() for l in block if l.strip().lower().startswith("tenant_id ")
-                 and not l.split(maxsplit=1)[1].strip().startswith("${")]
+    offenders = [
+        ln.strip()
+        for ln in block
+        if ln.strip().lower().startswith("tenant_id ")
+        and not ln.split(maxsplit=1)[1].strip().startswith("${")
+    ]
     assert not offenders, f"static tenant in tier-0 loki OUTPUT: {offenders}"

@@ -95,3 +95,61 @@ def test_fluent_bit_tier0_documents_privacy_classification():
         assert must_have in content, (
             f"fluent-bit-tier0.conf header missing scope marker {must_have!r}"
         )
+
+
+# ── Loki auth (ADR-0003 Step 3) ──────────────────────────────────────────────
+#
+# Regression guard for 2026-07-10. tier-0 is the ONLY fluent-bit on a device
+# without telemetry consent (tier-1 is consent-gated), so on most of the fleet
+# it is the sole Loki writer. It shipped with `Port 3100` hard-coded and a
+# shared literal `Tenant_ID greenautarky`, i.e. no per-device authentication.
+# Flipping Loki's `auth_enabled: true` would have made those devices go dark.
+#
+# The fix that was believed to cover this actually patched
+# `network-details.conf` in ha-operating-system — a scaffold no service loads.
+# These tests assert on the file the tier-0 unit really runs.
+
+_TIER0_CONF = REPO_ROOT / "src/ga-telemetry-config/etc/fluent-bit/fluent-bit-tier0.conf"
+
+
+def _loki_output_block() -> list[str]:
+    """The [OUTPUT] block whose Name is loki, as a list of lines."""
+    lines = _TIER0_CONF.read_text().splitlines()
+    blocks, cur = [], None
+    for line in lines:
+        if line.strip().startswith("[") and line.strip().endswith("]"):
+            if cur is not None:
+                blocks.append(cur)
+            cur = [line] if line.strip() == "[OUTPUT]" else None
+        elif cur is not None:
+            cur.append(line)
+    if cur is not None:
+        blocks.append(cur)
+    for b in blocks:
+        if any(l.split()[:2] == ["Name", "loki"] for l in b if l.split()):
+            return b
+    raise AssertionError("no [OUTPUT] block with `Name loki` in fluent-bit-tier0.conf")
+
+
+@pytest.mark.parametrize("key", ["Host", "Port", "http_user", "http_passwd", "tenant_id"])
+def test_tier0_loki_output_is_env_driven(key):
+    """Every endpoint/credential field must come from the systemd environment.
+
+    A literal here means the device cannot present a per-device credential —
+    and once Loki enforces auth, its logs are silently dropped.
+    """
+    block = _loki_output_block()
+    matching = [l for l in block if l.split() and l.split()[0] == key]
+    assert matching, f"tier-0 loki OUTPUT is missing `{key}`"
+    value = matching[0].split(maxsplit=1)[1].strip()
+    assert value.startswith("${") and value.endswith("}"), (
+        f"tier-0 loki OUTPUT `{key}` must be an env reference, got {value!r}"
+    )
+
+
+def test_tier0_loki_output_has_no_shared_static_tenant():
+    """`Tenant_ID greenautarky` was a fleet-wide shared tenant — no isolation."""
+    block = _loki_output_block()
+    offenders = [l.strip() for l in block if l.strip().lower().startswith("tenant_id ")
+                 and not l.split(maxsplit=1)[1].strip().startswith("${")]
+    assert not offenders, f"static tenant in tier-0 loki OUTPUT: {offenders}"

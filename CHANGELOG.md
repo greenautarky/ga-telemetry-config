@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.0.2 — 2026-07-29
+
+Fixes the journald filter construction in `fluent-bit-tier0.conf`. Two
+inputs combined a field filter with `PRIORITY` filters under
+`Systemd_Filter_Type Or`, which does not mean "field AND priority" — it
+ORs everything, so both inputs matched every journal entry at priority
+0-3 regardless of unit. Because Docker's journald driver stamps all
+container stderr as priority 3, the always-on tier-0 stream was
+carrying the full container output of the device.
+
+Measured on a canary before the change: of the records the kernel input
+collected, ~98.5% came from containers and ~1.5% were actual kernel
+messages.
+
+### Changed
+- `tier0.kernel` — one field filter (`_TRANSPORT=kernel`); severity now
+  applied by a `grep` filter on `PRIORITY`, where it is meaningful.
+- `tier0.supervisor` — filtered on `CONTAINER_NAME=hassio_supervisor`.
+  The previous `_SYSTEMD_UNIT=hassio-supervisor.service` matched nothing
+  at all: the Supervisor runs as a container and that unit does not
+  appear in the journal. Severity now comes from the message text,
+  since `PRIORITY` is 3 for all container output.
+- `tier0.auth` — `dropbear.service` added. The image ships dropbear,
+  not openssh, and has no sudo, so the two existing filters matched
+  nothing and this input — the failed-authentication evidence required
+  under CRA and Art. 32 — had never captured an event. The filters are
+  deliberately alternatives and rely on the default `Or`; this is now
+  documented in the file.
+- Loki output — `device_uuid` promoted to a label. Devices without
+  `/mnt/data/ga-device-label` were producing streams labelled only
+  `unknown`, which cannot be attributed to a device afterwards.
+
+
 ## 1.0.0 — 2026-06-08
 
 Initial release. Part of the Layer-2 → Tier-2 migration audit

@@ -157,3 +157,88 @@ def test_tier0_loki_output_has_no_shared_static_tenant():
         and not ln.split(maxsplit=1)[1].strip().startswith("${")
     ]
     assert not offenders, f"static tenant in tier-0 loki OUTPUT: {offenders}"
+
+
+# --- journald filter construction -------------------------------------
+#
+# Regression guards for 1.0.2. Three inputs in this file were silently
+# collecting the wrong thing for months; none of it was visible from
+# reading the config, only from running it against a real journal.
+
+
+def _input_blocks() -> dict[str, list[str]]:
+    """Every [INPUT] block, keyed by its Tag."""
+    blocks, cur = {}, None
+    for line in _TIER0_CONF.read_text().splitlines():
+        s = line.strip()
+        if s.startswith("[") and s.endswith("]"):
+            cur = [] if s == "[INPUT]" else None
+            if cur is not None:
+                blocks[len(blocks)] = cur
+        elif cur is not None:
+            cur.append(line)
+    out = {}
+    for blk in blocks.values():
+        tag = next((ln.split(maxsplit=1)[1].strip()
+                    for ln in blk if ln.split() and ln.split()[0] == "Tag"), None)
+        if tag:
+            out[tag] = blk
+    return out
+
+
+def test_no_input_mixes_a_field_filter_with_priority_filters():
+    """The `Systemd_Filter_Type Or` trap.
+
+    fluent-bit's default filter type is Or and it applies to ALL filters
+    of an input, not to field groups. Combining `_TRANSPORT=kernel` with
+    `PRIORITY=0..3` therefore does not mean "kernel AND warn+" — it
+    matches every journal entry at that priority, from any unit. Since
+    Docker stamps all container stderr as priority 3, such an input
+    collects the device's whole container output.
+
+    Narrow by field in the INPUT, by priority in a grep FILTER.
+    """
+    offenders = []
+    for tag, blk in _input_blocks().items():
+        filters = [ln.split(maxsplit=1)[1].strip()
+                   for ln in blk if ln.split() and ln.split()[0] == "Systemd_Filter"]
+        has_priority = any(f.startswith("PRIORITY=") for f in filters)
+        has_field = any(not f.startswith("PRIORITY=") for f in filters)
+        if has_priority and has_field:
+            offenders.append(tag)
+    assert not offenders, (
+        "inputs mixing a field filter with PRIORITY filters: "
+        f"{offenders} — they will match the whole journal at that priority"
+    )
+
+
+def test_supervisor_input_targets_the_container_not_a_unit():
+    """There is no `hassio-supervisor.service` in the journal — the
+    Supervisor runs as a container, so a _SYSTEMD_UNIT filter matches
+    nothing and the input goes silent."""
+    blk = _input_blocks().get("tier0.supervisor")
+    assert blk, "tier0.supervisor input missing"
+    joined = "\n".join(blk)
+    assert "CONTAINER_NAME=hassio_supervisor" in joined
+    assert "_SYSTEMD_UNIT=hassio-supervisor.service" not in joined
+
+
+def test_auth_input_covers_the_ssh_daemon_this_image_ships():
+    """The image ships dropbear, not openssh, and has no sudo. Without
+    dropbear this input — the failed-auth evidence for CRA / Art. 32 —
+    captures nothing at all."""
+    blk = _input_blocks().get("tier0.auth")
+    assert blk, "tier0.auth input missing"
+    assert "_SYSTEMD_UNIT=dropbear.service" in "\n".join(blk)
+
+
+def test_tier0_loki_labels_carry_the_device_uuid():
+    """device_label is `unknown` on devices that never got
+    /mnt/data/ga-device-label. Without the uuid such a stream cannot be
+    attributed to a device — which also makes an erasure request
+    unanswerable for it."""
+    block = _loki_output_block()
+    labels = next((ln for ln in block if ln.split() and ln.split()[0] == "Labels"), "")
+    assert "device_uuid=${DEVICE_UUID}" in labels, (
+        f"tier-0 Loki labels lack device_uuid: {labels.strip()!r}"
+    )

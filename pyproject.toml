@@ -1,6 +1,6 @@
 [project]
 name = "ga-telemetry-config"
-version = "1.0.1"
+version = "1.0.2"
 description = "GreenAutarky on-device telemetry configuration — fluent-bit boot-log capture + boot-timing metrics exporter"
 authors = [{name = "Thomas Taube", email = "thomas@greenautarky.com"}]
 license = {text = "Proprietary"}

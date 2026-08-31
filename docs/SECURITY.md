@@ -9,6 +9,8 @@ Tier-0 scope under GreenAutarky's privacy model:
 - RAUC update events (CRA-required: track update success/failure)
 - Failed-auth events on the device admin
 - Supervisor service-failure events
+- converge — device provisioning + steady-state reconcile (operational job/step
+  events only; `ga_manager.room_map`, which carries user-chosen room names, is excluded)
 - Boot-timing milestones (= ga-boot-timing's InfluxDB output)
 
 All justified under DSGVO Art. 6 (b) Vertragserfüllung + (f)
@@ -27,6 +29,7 @@ diff can't quietly expand scope.
 |---|---|
 | Customer-installed addon trying to exfiltrate tier-0 logs | Tier-0 buffer lives at `/mnt/data/logs/` (or wherever fluent-bit-tier0.conf points). Path is NOT under `/share/`, so addons cannot mount-read it. |
 | Tier-0 backpressure starving tier-1 | Tier-0 + tier-1 have **separate** storage buffers (= explicit in tier0 config). Tier-0 panic-event stream can't block tier-1 throughput. |
+| converge stream leaking room names (personal data) | Scope is per-**logger**, not per-container: only `ga_manager.jobs` + `ga_manager.workers.converge` ship; `ga_manager.room_map` is excluded. A `{must-ship, must-NOT-ship}` fixture test reads the live grep regex and is red-proofed against widening. |
 | Silent expansion of tier-0 scope | Pinned in tests + the in-config docstring + this doc. CI fails if the scope markers disappear. |
 
 ## Not defended against

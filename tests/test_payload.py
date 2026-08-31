@@ -255,19 +255,19 @@ def test_tier0_loki_labels_carry_the_device_uuid():
 # out of the config, so they rot the moment the scope is widened.
 
 CONVERGE_MUST_SHIP = [
-    '{"ts": "..", "level": "INFO", "logger": "ga_manager.jobs", "msg": "[job ec51cd43/converge] progress 100%: reconciliation done"}',
-    '{"ts": "..", "level": "INFO", "logger": "ga_manager.jobs", "msg": "[job ec51cd43/converge] installing addon 99f1cad4_ga_default_addon"}',
-    '{"ts": "..", "level": "WARNING", "logger": "ga_manager.jobs", "msg": "[job ec51cd43/converge] self-check FAILED - drifted"}',
-    '{"ts": "..", "level": "INFO", "logger": "ga_manager.workers.converge", "msg": "proxy trust: 2 proxy(s) trusted"}',
+    '{"logger": "ga_manager.jobs", "msg": "[job x/converge] step 11 provision"}',
+    '{"logger": "ga_manager.jobs", "msg": "[job x/converge] installing addon"}',
+    '{"logger": "ga_manager.jobs", "level": "WARNING", "msg": "self-check FAILED"}',
+    '{"logger": "ga_manager.workers.converge", "msg": "proxy trust: 2 trusted"}',
     '{"logger":"ga_manager.jobs","msg":"[job x/converge] step 3"}',
 ]
 
 CONVERGE_MUST_NOT_SHIP = [
-    '{"ts": "..", "level": "INFO", "logger": "ga_manager.room_map", "msg": "projected area kitchen (Ramins Schlafzimmer)"}',
-    '{"ts": "..", "level": "INFO", "logger": "ga_manager.network.strategies.lte_dongle.strategy", "msg": "no backend"}',
-    '{"ts": "..", "level": "INFO", "logger": "ga_manager.zigbee_bridge", "msg": "joined device 0x00"}',
-    '{"ts": "..", "level": "INFO", "logger": "ga_manager.jobs.runner", "msg": "queue drained"}',
-    '{"ts": "..", "level": "INFO", "logger": "ga_manager", "msg": "boot"}',
+    '{"logger": "ga_manager.room_map", "msg": "area kitchen (Ramins Schlafzimmer)"}',
+    '{"logger": "ga_manager.network.strategies.lte_dongle.strategy", "msg": "x"}',
+    '{"logger": "ga_manager.zigbee_bridge", "msg": "joined device 0x00"}',
+    '{"logger": "ga_manager.jobs.runner", "msg": "queue drained"}',
+    '{"logger": "ga_manager", "msg": "boot"}',
 ]
 
 

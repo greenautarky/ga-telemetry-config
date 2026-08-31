@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.3
+
+- tier-0: ship the converge operational stream (`ga_manager.jobs` +
+  `ga_manager.workers.converge`) to Loki without a consent gate. converge is our
+  own device provisioning + reconcile flow (DSGVO Art. 6(b) contract performance);
+  it was invisible in the cloud on a fresh device because tier-1 is consent-gated
+  and consent is only granted during onboarding — exactly when converge matters
+  most. `ga_manager.room_map` (user-chosen room names = personal data) is
+  EXCLUDED; a `{must-ship, must-NOT-ship}` fixture test reads the live grep regex
+  and is red-proofed against a scope-widening.
+
+
 ## 1.0.2 — 2026-07-29
 
 Fixes the journald filter construction in `fluent-bit-tier0.conf`. Two

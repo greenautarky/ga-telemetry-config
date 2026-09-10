@@ -14,6 +14,7 @@ consumers (= the running system) actually depend on:
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -242,3 +243,65 @@ def test_tier0_loki_labels_carry_the_device_uuid():
     assert "device_uuid=${DEVICE_UUID}" in labels, (
         f"tier-0 Loki labels lack device_uuid: {labels.strip()!r}"
     )
+
+
+# --- Tier-0 converge stream: operational visibility + PII contract -----------
+#
+# converge was lifted into the always-on tier-0 because it is invisible in the
+# cloud on a fresh device otherwise (tier-1 is consent-gated and consent is only
+# granted during onboarding, exactly when converge matters most). We ship only
+# the two operational loggers and EXCLUDE ga_manager.room_map, which carries
+# user-chosen room names (personal data). These fixtures read the LIVE grep regex
+# out of the config, so they rot the moment the scope is widened.
+
+CONVERGE_MUST_SHIP = [
+    '{"logger": "ga_manager.jobs", "msg": "[job x/converge] step 11 provision"}',
+    '{"logger": "ga_manager.jobs", "msg": "[job x/converge] installing addon"}',
+    '{"logger": "ga_manager.jobs", "level": "WARNING", "msg": "self-check FAILED"}',
+    '{"logger": "ga_manager.workers.converge", "msg": "proxy trust: 2 trusted"}',
+    '{"logger":"ga_manager.jobs","msg":"[job x/converge] step 3"}',
+]
+
+CONVERGE_MUST_NOT_SHIP = [
+    '{"logger": "ga_manager.room_map", "msg": "area kitchen (Ramins Schlafzimmer)"}',
+    '{"logger": "ga_manager.network.strategies.lte_dongle.strategy", "msg": "x"}',
+    '{"logger": "ga_manager.zigbee_bridge", "msg": "joined device 0x00"}',
+    '{"logger": "ga_manager.jobs.runner", "msg": "queue drained"}',
+    '{"logger": "ga_manager", "msg": "boot"}',
+]
+
+
+def _tier0_grep_regex(match_tag):
+    """Return the `Regex MESSAGE ...` of the tier-0 [FILTER] whose Match is
+    match_tag, read from the LIVE config. Re-declaring the pattern here would
+    test a copy and stay green while the real gate rots."""
+    text = FLUENT_BIT_T0.read_text()
+    for block in re.split(r"\n(?=\[)", text):
+        if block.lstrip().startswith("[FILTER]") and re.search(
+            rf"^\s*Match\s+{re.escape(match_tag)}\s*$", block, re.M
+        ):
+            m = re.search(r"^\s*Regex\s+MESSAGE\s+(.+?)\s*$", block, re.M)
+            if m:
+                return m.group(1)
+    return None
+
+
+def test_tier0_converge_input_present():
+    text = FLUENT_BIT_T0.read_text()
+    assert "Tag                 tier0.converge" in text, "tier0.converge input missing"
+    assert "CONTAINER_NAME=addon_99f1cad4_ga_manager" in text, (
+        "converge input must filter on the ga_manager container"
+    )
+
+
+def test_tier0_converge_grep_ships_operational_and_drops_pii():
+    pat = _tier0_grep_regex("tier0.converge")
+    assert pat is not None, (
+        "tier0.converge grep Regex not found in the live config -- fail closed "
+        "rather than pass on an empty check"
+    )
+    rx = re.compile(pat)
+    for line in CONVERGE_MUST_SHIP:
+        assert rx.search(line), f"operational converge line was dropped: {line}"
+    for line in CONVERGE_MUST_NOT_SHIP:
+        assert not rx.search(line), f"line must NOT ship (PII / out of scope): {line}"

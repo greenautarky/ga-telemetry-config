@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.4
+
+- tier-0: Loki streams carry the label `env` (Odoo #1191), the one environment
+  label tier-1 and telegraf already use; `ga_env` stays for one release as an
+  alias with the same value. The record field `env` is added next to `ga_env`.
+  The VALUE comes from the OS: from BOS with #1191 it is the device's fleet env
+  (`prod`/`staging`, `unknown` when it cannot be resolved); on older images it
+  is still the baked `GA_ENV`.
+
 ## 1.0.3
 
 - tier-0: ship the converge operational stream (`ga_manager.jobs` +

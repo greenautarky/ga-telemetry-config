@@ -245,6 +245,19 @@ def test_tier0_loki_labels_carry_the_device_uuid():
     )
 
 
+def test_tier0_loki_labels_carry_one_env_label_and_the_ga_env_alias():
+    """Odoo #1191: one `env` label across tier-0, tier-1 and telegraf. tier-0
+    only had `ga_env`, so no single query selected an environment across both
+    log tiers. `ga_env` stays one release as an alias, with the SAME value."""
+    block = _loki_output_block()
+    labels = next((ln for ln in block if ln.split() and ln.split()[0] == "Labels"), "")
+    pairs = {p.split("=", 1)[0].strip(): p.split("=", 1)[1].strip()
+             for p in labels.split(None, 1)[1].split(",") if "=" in p}
+    assert pairs.get("env") == "${GA_ENV}", f"tier-0 Loki labels lack env: {labels.strip()!r}"
+    assert pairs.get("ga_env") == pairs.get("env"), (
+        f"ga_env alias must carry the same value as env: {labels.strip()!r}")
+
+
 # --- Tier-0 converge stream: operational visibility + PII contract -----------
 #
 # converge was lifted into the always-on tier-0 because it is invisible in the

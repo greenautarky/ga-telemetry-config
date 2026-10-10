@@ -383,3 +383,78 @@ def test_tier0_cursor_dbs_do_not_fsync():
 )
 def test_cursor_db_guard_fixtures(conf, expected):
     assert _db_inputs_without_sync_off(conf) == expected
+
+
+# --- tier0.auth keeps security evidence, drops connection bookkeeping -------
+#
+# 2026-10-09/10: 98 % of all tier-0 lines were sshd/dropbear at PRIORITY 6,
+# mostly four lines per TCP connection that never attempts a login (health
+# probes of the SSH port). The filter is read from the LIVE config; the
+# fixtures are anonymised real lines.
+
+import json  # noqa: E402
+
+AUTH_FIXTURES = REPO_ROOT / "tests" / "fixtures" / "tier0_auth.json"
+
+
+def _grep_filters(conf_text: str, match: str) -> list[dict]:
+    """[FILTER] sections with Name grep and the given Match, rules in order."""
+    out, cur = [], None
+    for raw in conf_text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("["):
+            cur = {"rules": []} if line.upper() == "[FILTER]" else None
+            if cur is not None:
+                out.append(cur)
+            continue
+        if cur is None:
+            continue
+        key, _, value = line.partition(" ")
+        key, value = key.lower(), value.strip()
+        if key in ("regex", "exclude"):
+            field, _, rx = value.partition(" ")
+            cur["rules"].append((key, field, rx.strip()))
+        else:
+            cur[key] = value
+    return [f for f in out if f.get("name") == "grep" and f.get("match") == match]
+
+
+def _passes(filters: list[dict], record: dict) -> bool:
+    for f in filters:
+        hits = [bool(re.search(rx, record.get(field, ""))) for kind, field, rx in f["rules"]
+                if kind == "regex"]
+        op = f.get("logical_op", "legacy").lower()
+        ok = any(hits) if op == "or" else all(hits)
+        if not ok:
+            return False
+    return True
+
+
+def _auth_records(kind: str) -> list[dict]:
+    data = json.loads(AUTH_FIXTURES.read_text())
+    return [{"PRIORITY": p, "_COMM": c, "MESSAGE": m} for p, c, m in data[kind]]
+
+
+def test_tier0_auth_filter_exists():
+    filters = _grep_filters(FLUENT_BIT_T0.read_text(), "tier0.auth")
+    assert filters, "no grep FILTER on tier0.auth — every sshd connection line ships"
+    assert any(f.get("logical_op", "").lower() == "or" for f in filters)
+
+
+@pytest.mark.parametrize("record", _auth_records("keep"), ids=lambda r: r["MESSAGE"][:40])
+def test_tier0_auth_keeps_security_evidence(record):
+    assert _passes(_grep_filters(FLUENT_BIT_T0.read_text(), "tier0.auth"), record)
+
+
+@pytest.mark.parametrize("record", _auth_records("drop"), ids=lambda r: r["MESSAGE"][:40])
+def test_tier0_auth_drops_connection_bookkeeping(record):
+    assert not _passes(_grep_filters(FLUENT_BIT_T0.read_text(), "tier0.auth"), record)
+
+
+def test_tier0_record_is_slim():
+    """The device identity travels as Loki labels; the record keeps what explains a line."""
+    text = FLUENT_BIT_T0.read_text()
+    keys = re.findall(r"^\s*Allowlist_key\s+(\S+)", text, re.M)
+    assert set(keys) == {"MESSAGE", "PRIORITY", "SYSLOG_IDENTIFIER", "UNIT", "tier"}, keys

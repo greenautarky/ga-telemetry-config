@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.1.0
+
+- **tier-0 auth: keep the security evidence, drop the connection bookkeeping**
+  (Odoo #1227).
+  - Measured over 24 h (2026-10-09/10, 10 devices): 98 % of all tier-0 lines
+    were sshd/dropbear at PRIORITY 6. Most were four lines per TCP connection
+    that never attempts a login, largely from health probes of the SSH port.
+  - Kept, at any priority: everything at PRIORITY 0-4; accepted logins,
+    including the SSH certificate identity; failed or refused logins (revoked
+    key, invalid user, too many attempts); penalties for failed
+    authentication; all of sudo.
+  - Dropped: connection open/close, key-exchange aborts without a login
+    attempt, session bookkeeping after an accepted login.
+- **Slim tier-0 record.** A line kept every journal field: 26 fields,
+  ~800 bytes, of which the message was ~150. The record now keeps MESSAGE,
+  PRIORITY, SYSLOG_IDENTIFIER, UNIT and the tier stamp. The device identity
+  stays on every stream as Loki labels.
+- **Measured** on the real fluent-bit 3.2.10 with an HTTP sink
+  (`tests/proof/tier0_bytes.sh`), over a device-day mix of 284 journal lines:
+  - 1.0.5: 284 lines shipped, 275,574 push bytes (970 bytes/line);
+  - 1.1.0: 20 lines (every accepted/failed login, kernel and converge line),
+    5,692 push bytes (285 bytes/line). That is -98 %.
+- Tests: live-config regexes over anonymised real must-keep/must-drop
+  fixtures (`tests/fixtures/tier0_auth.json`), plus the slim-record guard.
+
 ## 1.0.5
 
 - tier-0: every journald input's cursor DB now runs with `DB.Sync Off`

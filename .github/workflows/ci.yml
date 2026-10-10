@@ -37,3 +37,27 @@ jobs:
         run: pip install -e .[dev]
       - name: Pytest
         run: pytest tests/ -v
+
+  # The real fluent-bit (the version the OS builds) over the runner's live
+  # journal: the shipped config must not fsync per journal line, and a mutant
+  # without `DB.Sync Off` must — so the check proves it can fail, every run.
+  cursor-fsync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: strace sidecar image
+        run: |
+          printf 'FROM debian:trixie-slim\nRUN apt-get update -qq && apt-get install -y -qq strace\n' \
+            | docker build -q -t local/strace:trixie -
+      - name: Measure shipped config and mutant
+        run: |
+          set -euo pipefail
+          cfg=src/ga-telemetry-config/etc/fluent-bit/fluent-bit-tier0.conf
+          grep -v -i '^[[:space:]]*DB\.Sync' "$cfg" > "$RUNNER_TEMP/mutant-sync-full.conf"
+          sudo chmod -R a+rX /var/log/journal /run/log/journal 2>/dev/null || true
+          WINDOW=45 RATE=3 bash tests/proof/cursor_fsync.sh "$cfg" "$RUNNER_TEMP/mutant-sync-full.conf" | tee out.txt
+          shipped=$(awk '/^c1-/{split($4,a,"=");print a[2]}' out.txt)
+          mutant=$(awk '/^c2-/{split($4,a,"=");print a[2]}' out.txt)
+          echo "shipped per_s=$shipped mutant per_s=$mutant"
+          awk -v s="$shipped" 'BEGIN{exit !(s <= 0.1)}' || { echo "::error::shipped config fsyncs $shipped/s"; exit 1; }
+          awk -v m="$mutant" 'BEGIN{exit !(m >= 1)}' || { echo "::error::mutant only $m/s — the measurement cannot see the defect"; exit 1; }

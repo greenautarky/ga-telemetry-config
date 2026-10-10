@@ -318,3 +318,68 @@ def test_tier0_converge_grep_ships_operational_and_drops_pii():
         assert rx.search(line), f"operational converge line was dropped: {line}"
     for line in CONVERGE_MUST_NOT_SHIP:
         assert not rx.search(line), f"line must NOT ship (PII / out of scope): {line}"
+
+
+# --- Cursor DBs must not fsync per collect round (bench device, 2026-10-10) ---------
+#
+# in_systemd saves its cursor after every collect round, i.e. on every journal
+# change from any unit. With the SQLite default (synchronous=FULL) that is a
+# burst of fsyncs per journal line; on a bench device it drove ~2/3 of all SD writes.
+# The guard reads the LIVE config (never a copy) and fails closed when it
+# finds no DB-backed input at all.
+
+
+def _inputs(conf_text: str) -> list[dict[str, str]]:
+    """Every [INPUT] section as {lower-cased key: value} (last value wins)."""
+    sections: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    for raw in conf_text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("["):
+            current = {} if line.upper() == "[INPUT]" else None
+            if current is not None:
+                sections.append(current)
+            continue
+        if current is not None:
+            key, _, value = line.partition(" ")
+            current[key.lower()] = value.strip()
+    return sections
+
+
+def _db_inputs_without_sync_off(conf_text: str) -> list[str]:
+    return [
+        s.get("tag", "<untagged>")
+        for s in _inputs(conf_text)
+        if "db" in s and s.get("db.sync", "").lower() != "off"
+    ]
+
+
+def test_tier0_cursor_dbs_do_not_fsync():
+    inputs = _inputs(FLUENT_BIT_T0.read_text())
+    with_db = [s for s in inputs if "db" in s]
+    assert with_db, "no DB-backed [INPUT] found — the parser or the config changed shape"
+    offenders = _db_inputs_without_sync_off(FLUENT_BIT_T0.read_text())
+    assert not offenders, (
+        f"[INPUT]s with a cursor DB but without `DB.Sync Off`: {offenders} — "
+        "each one fsyncs on every journal line (see the CURSOR DBs note in the config)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("conf", "expected"),
+    [
+        # must-flag
+        ("[INPUT]\n    Name systemd\n    Tag a\n    DB /x.db\n", ["a"]),
+        ("[INPUT]\n    Name systemd\n    Tag b\n    DB /x.db\n    DB.Sync Full\n", ["b"]),
+        ("[INPUT]\n    Name systemd\n    Tag c\n    DB /x.db\n    # DB.Sync Off\n", ["c"]),
+        # must-pass
+        ("[INPUT]\n    Name systemd\n    Tag d\n    DB /x.db\n    DB.Sync Off\n", []),
+        ("[INPUT]\n    Name systemd\n    Tag e\n    DB /x.db\n    db.sync off\n", []),
+        ("[INPUT]\n    Name systemd\n    Tag f\n    Read_From_Tail true\n", []),
+        ("[OUTPUT]\n    Name loki\n    DB /not-an-input\n", []),
+    ],
+)
+def test_cursor_db_guard_fixtures(conf, expected):
+    assert _db_inputs_without_sync_off(conf) == expected

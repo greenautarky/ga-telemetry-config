@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.5
+
+- tier-0: every journald input's cursor DB now runs with `DB.Sync Off`
+  (Odoo #1224). fluent-bit saves the cursor after every collect round, i.e. on
+  every journal line from any unit. With SQLite's default (synchronous=FULL),
+  that was a burst of fsyncs per line. On a bench device (BOSv1.5.0-rc6), pausing
+  tier-0 cut SD writes by 68 % and ext4 journal commits from 10.3/s to 0.69/s.
+  Measured on the real fluent-bit 3.2.10 at 3 journal lines/s: 8.0 fsyncs/s
+  before, 0 after (`tests/proof/cursor_fsync.sh`, also run in CI against a
+  mutant). Trade-off: after a power cut a few lines may be shipped twice.
+  A DB left unreadable makes that input re-read from the journal head.
+  Nothing is lost.
+
 ## 1.0.4
 
 - tier-0: Loki streams carry the label `env` (Odoo #1191), the one environment

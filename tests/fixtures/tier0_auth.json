@@ -1,0 +1,132 @@
+{
+  "_comment": "Anonymised from real tier-0 sshd/dropbear lines (24 h, 2026-10-09/10). keep = security evidence, drop = connection bookkeeping. Each entry: [PRIORITY, _COMM, MESSAGE].",
+  "keep": [
+    [
+      "6",
+      "sshd-session",
+      "Accepted publickey for root from 100.64.0.1 port 51514 ssh2: ED25519-CERT SHA256:AAAA ID user@ga (serial 1) CA ECDSA SHA256:BBBB"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Accepted certificate ID \"user@ga\" (serial 1) signed by ECDSA CA SHA256:BBBB via /etc/ssh/ga_user_ca.pub"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Failed publickey for root from 100.64.0.2 port 40000 ssh2: ED25519 SHA256:CCCC"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Failed publickey for root from 100.64.0.2 port 40002 ssh2: RSA SHA256:DDDD"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Authentication key RSA SHA256:DDDD revoked by file /etc/ssh/ga_revoked_keys"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Connection closed by authenticating user root 100.64.0.2 port 40002 [preauth]"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "srclimit_penalise: ipv4: new 100.64.0.2/32 deferred penalty of 5 seconds for penalty: failed authentication"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Invalid user admin from 100.64.0.3 port 1234"
+    ],
+    [
+      "4",
+      "sshd-session",
+      "error: maximum authentication attempts exceeded for root from 100.64.0.3 port 1234 ssh2 [preauth]"
+    ],
+    [
+      "3",
+      "sshd",
+      "error: Bind to port 22222 on 0.0.0.0 failed: Address already in use."
+    ],
+    [
+      "6",
+      "dropbear",
+      "Bad password attempt for 'root' from 100.64.0.4:5555"
+    ],
+    [
+      "6",
+      "dropbear",
+      "Pubkey auth succeeded for 'root' with ssh-ed25519 key SHA256:EEEE from 100.64.0.4:5556"
+    ],
+    [
+      "6",
+      "dropbear",
+      "Exit before auth from <100.64.0.4:5557>: (user 'root', 3 fails): Max auth tries reached - user 'root'"
+    ],
+    [
+      "6",
+      "sudo",
+      "root : TTY=pts/0 ; PWD=/root ; USER=root ; COMMAND=/bin/true"
+    ]
+  ],
+  "drop": [
+    [
+      "6",
+      "sshd",
+      "Connection from 100.64.0.9 port 60000 on 100.64.0.10 port 22222 rdomain \"\""
+    ],
+    [
+      "6",
+      "sshd-session",
+      "kex_exchange_identification: Connection closed by remote host"
+    ],
+    [
+      "6",
+      "sshd",
+      "srclimit_penalise: ipv4: new 100.64.0.9/32 deferred penalty of 1 seconds for penalty: connections without attempting authentication"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Connection closed by 100.64.0.9 port 60000"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Postponed publickey for root from 100.64.0.1 port 51514 ssh2 [preauth]"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Starting session: command for root from 100.64.0.1 port 51514 id 0"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Received disconnect from 100.64.0.1 port 51514:11: disconnected by user"
+    ],
+    [
+      "6",
+      "sshd-session",
+      "Disconnected from user root 100.64.0.1 port 51514"
+    ],
+    [
+      "6",
+      "dropbear",
+      "Child connection from 100.64.0.4:5558"
+    ],
+    [
+      "6",
+      "dropbear",
+      "Exit before auth from <100.64.0.4:5558>: (user 'root', 0 fails): Exited normally"
+    ],
+    [
+      "5",
+      "sshd",
+      "Server listening on 0.0.0.0 port 22222."
+    ]
+  ]
+}

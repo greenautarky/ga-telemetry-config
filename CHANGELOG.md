@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.1
+
+- **tier-0 converge channel: match the BOSv1.6 container name** (Odoo #1746).
+  Supervisor 2026.07.4+ names the ga_manager container
+  `app_<hash>_ga_manager`; the input filtered only on `addon_<hash>_...`, so
+  the consent-independent converge stream shipped nothing on BOSv1.6.
+  `tier0.converge` now lists both names (alternatives under the default
+  `Systemd_Filter_Type Or`, fluent-bit 3.2.10), so BOSv1.5 devices keep
+  working. No other addon_/app_ assumption exists in this repo.
+
 ## 1.1.0
 
 - **tier-0 auth: keep the security evidence, drop the connection bookkeeping**

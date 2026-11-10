@@ -69,6 +69,8 @@ done
 for i in $(seq 1 4); do rec "FAIL$i" sshd.service sshd-session 6 "Failed publickey for root from $IP port $((60000 + i)) ssh2: RSA SHA256:cmV2b2tlZGtleQ"; done
 for i in $(seq 1 2); do rec "KERN$i" - kernel 3 "rk_gmac-dwmac fe010000.ethernet eth0: __stmmac_open: Cannot attach to PHY (error: -19)"; done
 for i in $(seq 1 2); do rec "CONV$i" docker.service addon_99f1cad4_ga_manager 3 "{\"ts\": \"2026-10-10T00:00:00Z\", \"level\": \"INFO\", \"logger\": \"ga_manager.jobs\", \"msg\": \"[job abc/converge] step 3/9 ok\"}" "CONTAINER_NAME=addon_99f1cad4_ga_manager"; done
+# BOSv1.6 (Supervisor >= 2026.07.4) names the container app_<hash>_ga_manager (Odoo #1746)
+for i in $(seq 1 2); do rec "CONVAPP$i" docker.service app_99f1cad4_ga_manager 3 "{\"ts\": \"2026-10-10T00:00:00Z\", \"level\": \"INFO\", \"logger\": \"ga_manager.jobs\", \"msg\": \"[job abc/converge] step 3/9 ok\"}" "CONTAINER_NAME=app_99f1cad4_ga_manager"; done
 mkdir -p "$W/journal"
 "$JR" --output="$W/journal/fx.journal" "$W/fx.export" >/dev/null 2>&1 || die2 "journal-remote failed"
 
@@ -111,9 +113,10 @@ while i < len(data):
         for ts, line in s['values']:
             lines.append(line); line_bytes += len(line.encode())
 def klass(l):
-    m = re.search(r'FX-(PROBE|AUTH|SESS|FAIL|KERN|CONV)', json.loads(l).get('MESSAGE', ''))
+    m = re.search(r'FX-(PROBE|AUTH|SESS|FAIL|KERN|CONVAPP|CONV)', json.loads(l).get('MESSAGE', ''))
     return m.group(1) if m else 'other'
 cls = collections.Counter(klass(l) for l in lines)
+print(f"{sys.argv[2]}: lines={len(lines)} push_bytes={body_bytes} line_bytes={line_bytes} "
       f"bytes/line={line_bytes/max(1,len(lines)):.0f} push_bytes/line={body_bytes/max(1,len(lines)):.0f} classes={dict(sorted(cls.items()))}")
 PY
 done

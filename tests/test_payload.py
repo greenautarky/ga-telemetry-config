@@ -302,9 +302,17 @@ def _tier0_grep_regex(match_tag):
 def test_tier0_converge_input_present():
     text = FLUENT_BIT_T0.read_text()
     assert "Tag                 tier0.converge" in text, "tier0.converge input missing"
-    assert "CONTAINER_NAME=addon_99f1cad4_ga_manager" in text, (
-        "converge input must filter on the ga_manager container"
-    )
+    # Supervisor < 2026.07 names the container addon_*, >= 2026.07.4 app_*
+    # (Odoo #1746): both must be listed, as OR-alternatives on ONE field.
+    blk = _input_blocks().get("tier0.converge")
+    assert blk, "tier0.converge input block missing"
+    filters = [ln.split(maxsplit=1)[1].strip() for ln in blk
+               if ln.split() and ln.split()[0] == "Systemd_Filter"]
+    assert sorted(filters) == [
+        "CONTAINER_NAME=addon_99f1cad4_ga_manager",
+        "CONTAINER_NAME=app_99f1cad4_ga_manager",
+    ], f"converge input must match both container names, got {filters}"
+    assert not any("Systemd_Filter_Type" in ln and "and" in ln.lower() for ln in blk)
 
 
 def test_tier0_converge_grep_ships_operational_and_drops_pii():
